@@ -1,4 +1,4 @@
-name: Build and Deploy Two-Tier Flask App
+name: Build and Push Two-Tier Flask App
 
 on:
   push:
@@ -30,27 +30,3 @@ jobs:
           tags: |
             ${{ secrets.DOCKERHUB_USERNAME }}/two-tier-flask-app:latest
             ${{ secrets.DOCKERHUB_USERNAME }}/two-tier-flask-app:${{ github.sha }}
-
-  deploy:
-    needs: build-and-push
-    runs-on: ubuntu-latest
-
-    steps:
-      - name: Checkout Code
-        uses: actions/checkout@v4
-
-      - name: Run New Container
-        run: |
-          echo "Pulling latest image and recreating container..."
-          docker pull ${{ secrets.DOCKERHUB_USERNAME }}/two-tier-flask-app:latest
-          docker stop flaskapp || true
-          docker rm flaskapp || true
-          docker run -d \
-            -p 5000:5000 \
-            --network twotier \
-            -e MYSQL_HOST=mysql \
-            -e MYSQL_USER=admin \
-            -e MYSQL_PASSWORD=admin \
-            -e MYSQL_DB=myDB \
-            --name flaskapp \
-            ${{ secrets.DOCKERHUB_USERNAME }}/two-tier-flask-app:latest
