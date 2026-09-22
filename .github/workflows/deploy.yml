@@ -1,0 +1,56 @@
+name: Build and Deploy Two-Tier Flask App
+
+on:
+  push:
+    branches: [ "main" ]
+
+jobs:
+  build-and-push:
+    runs-on: ubuntu-latest
+
+    steps:
+      - name: Checkout Code
+        uses: actions/checkout@v4
+
+      - name: Log in to Docker Hub
+        uses: docker/login-action@v3
+        with:
+          username: ${{ secrets.DOCKERHUB_USERNAME }}
+          password: ${{ secrets.DOCKERHUB_TOKEN }}
+
+      - name: Set up Docker Buildx
+        uses: docker/setup-buildx-action@v3
+
+      - name: Build and Push Docker Image
+        uses: docker/build-push-action@v5
+        with:
+          context: .
+          file: ./dockerfile
+          push: true
+          tags: |
+            ${{ secrets.DOCKERHUB_USERNAME }}/two-tier-flask-app:latest
+            ${{ secrets.DOCKERHUB_USERNAME }}/two-tier-flask-app:${{ github.sha }}
+
+  deploy:
+    needs: build-and-push
+    runs-on: ubuntu-latest
+
+    steps:
+      - name: Checkout Code
+        uses: actions/checkout@v4
+
+      - name: Run New Container Locally / Remote Host
+        run: |
+          echo "Pulling latest image and recreating container..."
+          docker pull ${{ secrets.DOCKERHUB_USERNAME }}/two-tier-flask-app:latest
+          docker stop flaskapp || true
+          docker rm flaskapp || true
+          docker run -d \
+            -p 5000:5000 \
+            --network twotier \
+            -e MYSQL_HOST=mysql \
+            -e MYSQL_USER=admin \
+            -e MYSQL_PASSWORD=admin \
+            -e MYSQL_DB=myDB \
+            --name flaskapp \
+            ${{ secrets.DOCKERHUB_USERNAME }}/two-tier-flask-app:latest
