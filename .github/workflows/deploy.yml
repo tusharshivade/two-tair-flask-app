@@ -1,10 +1,13 @@
-name: Build and Push Two-Tier Flask App
+name: Build, Test, and Deploy Two-Tier Flask App
 
 on:
   push:
     branches: [ "main" ]
 
 jobs:
+  # -------------------------------------------------------------
+  # STAGE 1: BUILD & PUSH DOCKER IMAGE
+  # -------------------------------------------------------------
   build-and-push:
     runs-on: ubuntu-latest
 
@@ -30,3 +33,74 @@ jobs:
           tags: |
             ${{ secrets.DOCKERHUB_USERNAME }}/two-tier-flask-app:latest
             ${{ secrets.DOCKERHUB_USERNAME }}/two-tier-flask-app:${{ github.sha }}
+
+  # -------------------------------------------------------------
+  # STAGE 2: TEST APPLICATION SYNTAX
+  # -------------------------------------------------------------
+  test:
+    needs: build-and-push
+    runs-on: ubuntu-latest
+
+    steps:
+      - name: Checkout Code
+        uses: actions/checkout@v4
+
+      - name: Set up Python
+        uses: actions/setup-python@v5
+        with:
+          python-version: '3.10'
+
+      - name: Install Dependencies & Check Syntax
+        run: |
+          python -m pip install --upgrade pip
+          if [ -f requirements.txt ]; then pip install -r requirements.txt; fi
+          python -m py_compile app.py
+
+  # -------------------------------------------------------------
+  # STAGE 3: DEPLOY USING DOCKER COMPOSE (Self-Hosted Runner)
+  # -------------------------------------------------------------
+  deploy:
+    needs: test
+    runs-on: self-hosted
+
+    steps:
+      - name: Checkout Code
+        uses: actions/checkout@v4
+
+      - name: Deploy with Docker Compose
+        run: |
+          echo "Pulling latest services and deploying..."
+          
+          # Export variables so docker-compose uses your latest built image
+          export DOCKERHUB_USERNAME=${{ secrets.DOCKERHUB_USERNAME }}
+          
+          # Pull the latest backend image
+          docker compose pull backend || docker-compose pull backend
+          
+          # Recreate containers in detached mode
+          docker compose up -d --remove-orphans || docker-compose up -d --remove-orphans
+
+  # -------------------------------------------------------------
+  # STAGE 4: FAILURE ALERT (Runs if any job above fails)
+  # -------------------------------------------------------------
+  notify-on-failure:
+    needs: [build-and-push, test, deploy]
+    if: failure()
+    runs-on: ubuntu-latest
+
+    steps:
+      - name: Send Email Alert
+        uses: dawidd6/action-send-mail@v3
+        with:
+          server_address: smtp.gmail.com
+          server_port: 465
+          secure: true
+          username: ${{ secrets.MAIL_USERNAME }}
+          password: ${{ secrets.MAIL_PASSWORD }}
+          subject: "🚨 Pipeline Failed: ${{ github.repository }}"
+          to: ${{ secrets.ALERT_EMAIL }}
+          from: GitHub Actions
+          body: |
+            Pipeline failed for commit ${{ github.sha }} pushed by ${{ github.actor }}.
+            
+            Check details: https://github.com/${{ github.repository }}/actions
