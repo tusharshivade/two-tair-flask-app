@@ -5,9 +5,6 @@ on:
     branches: [ "main" ]
 
 jobs:
-  # -------------------------------------------------------------
-  # STAGE 1: BUILD & PUSH DOCKER IMAGE
-  # -------------------------------------------------------------
   build-and-push:
     runs-on: ubuntu-latest
 
@@ -34,9 +31,7 @@ jobs:
             ${{ secrets.DOCKERHUB_USERNAME }}/two-tier-flask-app:latest
             ${{ secrets.DOCKERHUB_USERNAME }}/two-tier-flask-app:${{ github.sha }}
 
-  # -------------------------------------------------------------
-  # STAGE 2: TEST APPLICATION SYNTAX
-  # -------------------------------------------------------------
+ 
   test:
     needs: build-and-push
     runs-on: ubuntu-latest
@@ -56,9 +51,6 @@ jobs:
           if [ -f requirements.txt ]; then pip install -r requirements.txt; fi
           python -m py_compile app.py
 
-  # -------------------------------------------------------------
-  # STAGE 3: DEPLOY USING DOCKER COMPOSE (Self-Hosted Runner)
-  # -------------------------------------------------------------
   deploy:
     needs: test
     runs-on: ubuntu-latest
@@ -80,9 +72,7 @@ jobs:
           # Recreate containers in detached mode
           docker compose up -d --remove-orphans || docker-compose up -d --remove-orphans
 
-  # -------------------------------------------------------------
-  # STAGE 4: FAILURE ALERT (Runs if any job above fails)
-  # -------------------------------------------------------------
+
   notify-on-failure:
     needs: [build-and-push, test, deploy]
     if: failure()
