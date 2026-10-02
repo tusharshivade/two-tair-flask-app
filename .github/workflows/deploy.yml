@@ -31,7 +31,6 @@ jobs:
             ${{ secrets.DOCKERHUB_USERNAME }}/two-tier-flask-app:latest
             ${{ secrets.DOCKERHUB_USERNAME }}/two-tier-flask-app:${{ github.sha }}
 
- 
   test:
     needs: build-and-push
     runs-on: ubuntu-latest
@@ -50,6 +49,15 @@ jobs:
           python -m pip install --upgrade pip
           if [ -f requirements.txt ]; then pip install -r requirements.txt; fi
           python -m py_compile app.py
+
+      - name: Install Playwright & Dependencies
+        run: |
+          pip install pytest-playwright
+          playwright install --with-deps
+
+      - name: Run Playwright Tests
+        run: |
+          pytest
 
   deploy:
     needs: test
@@ -71,7 +79,6 @@ jobs:
           
           # Recreate containers in detached mode
           docker compose up -d --remove-orphans || docker-compose up -d --remove-orphans
-
 
   notify-on-failure:
     needs: [build-and-push, test, deploy]
